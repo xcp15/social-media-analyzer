@@ -1,11 +1,17 @@
 import { useState } from 'react'
 import UploadZone from './components/UploadZone'
 import FileInfoCard from './components/FileInfoCard'
+import ResultsDashboard from './components/ResultsDashboard'
 import { validateFile } from './lib/file'
+import { analyzeFile, type AnalyzeResponse } from './lib/api'
+
+type Status = 'idle' | 'analyzing' | 'error'
 
 function App() {
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [status, setStatus] = useState<Status>('idle')
+  const [result, setResult] = useState<AnalyzeResponse | null>(null)
 
   function handleFileSelect(selected: File) {
     const validationError = validateFile(selected)
@@ -16,11 +22,29 @@ function App() {
     }
     setError(null)
     setFile(selected)
+    setResult(null)
+    setStatus('idle')
   }
 
   function handleRemove() {
     setFile(null)
     setError(null)
+    setResult(null)
+    setStatus('idle')
+  }
+
+  async function handleAnalyze() {
+    if (!file) return
+    setStatus('analyzing')
+    setError(null)
+    try {
+      const response = await analyzeFile(file)
+      setResult(response)
+      setStatus('idle')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.')
+      setStatus('error')
+    }
   }
 
   return (
@@ -51,11 +75,14 @@ function App() {
 
           <button
             type="button"
-            disabled={!file}
+            disabled={!file || status === 'analyzing'}
+            onClick={handleAnalyze}
             className="w-full rounded-lg bg-emerald-600 px-4 py-3 font-medium text-white transition-colors disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 hover:enabled:bg-emerald-700"
           >
-            Analyze
+            {status === 'analyzing' ? 'Analyzing…' : 'Analyze'}
           </button>
+
+          {result && <ResultsDashboard result={result} />}
         </main>
       </div>
     </div>
