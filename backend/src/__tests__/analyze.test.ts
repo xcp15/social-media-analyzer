@@ -5,6 +5,7 @@ import { MAX_FILE_SIZE_BYTES } from '../constants';
 
 const mockAnalysis = {
   score: 80,
+  scoreBreakdown: { hook: 75, clarity: 85, callToAction: 60, visualAppeal: 80, engagementPotential: 80 },
   strengths: ['Clear message'],
   weaknesses: ['No hashtags'],
   suggestions: ['Add a call to action'],

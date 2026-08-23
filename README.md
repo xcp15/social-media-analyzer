@@ -28,28 +28,74 @@ structured output mode (`responseSchema`) so the model is constrained to
 return valid JSON matching the shape below, rather than relying on prompt
 wording alone.
 
-Exact prompt template (`${text}` is the extracted post text):
+**For image uploads, the actual image is sent to Gemini** (as inline base64
+data alongside the extracted OCR text), so "Visual Appeal" reflects a real
+vision-based assessment of the image — not a guess from OCR'd text. For
+PDFs, only the extracted text is available, so `visualAppeal` is omitted
+from the request/response entirely rather than having the model invent a
+number for something it never saw.
+
+Exact prompt template (`${text}` is the extracted post text; the bracketed
+line and the `visualAppeal` field are included only when an image is
+attached):
 
 ```
-You are a social media growth expert. Analyze the following social media post text and evaluate its likely audience engagement.
+You are a social media growth expert. Analyze the following social media post[, including the attached image,] across specific dimensions.
 
 Post text:
 """
 ${text}
 """
 
+Score each applicable dimension from 0-100:
+- hook: does the opening immediately capture attention and create curiosity?
+- clarity: how clear, readable, and easy to understand is the message?
+- callToAction: does the post ask the audience to do something specific (comment, share, click, etc.)? Score low if there is no call to action.
+- visualAppeal: composition, readability of any on-image text, visual hierarchy, and whether the image supports the message.  [omitted entirely when no image is attached]
+- engagementPotential: overall likelihood of likes/comments/shares, considering the whole post (not a duplicate of the other scores).
+
 Respond with ONLY a JSON object (no markdown, no commentary) with this exact shape:
 {
-  "score": <integer 0-100, overall engagement potential>,
+  "scoreBreakdown": {
+    "hook": <integer 0-100>,
+    "clarity": <integer 0-100>,
+    "callToAction": <integer 0-100>,
+    "visualAppeal": <integer 0-100>,
+    "engagementPotential": <integer 0-100>
+  },
   "strengths": [<short strings describing what the post does well>],
   "weaknesses": [<short strings describing what could hurt engagement>],
   "suggestions": [<short, actionable strings to improve the post>]
 }
 ```
 
-The response is still defensively parsed and validated server-side (shape
-checked, score clamped to 0-100) — malformed, empty, or failed LLM responses
-surface a clean error to the user instead of crashing the request.
+### Overall score: computed, not model-guessed
+
+The model is **not** asked for an overall score directly. Instead, the
+backend computes it deterministically as a weighted average of the five
+dimension scores (`backend/src/services/analysisService.ts`, `SCORE_WEIGHTS`):
+
+| Dimension | Weight |
+|---|---|
+| Hook | 0.25 |
+| Clarity | 0.20 |
+| Call to Action | 0.20 |
+| Visual Appeal | 0.15 |
+| Engagement Potential | 0.20 |
+
+This guarantees the headline score and its breakdown always tell the same
+story (an LLM asked to output both independently can produce an overall
+score that doesn't match its own breakdown). When `visualAppeal` is
+unavailable (PDF text, or the model omitted/malformed a dimension), that
+weight is redistributed proportionally across the remaining dimensions
+rather than penalizing the post for something that was never assessed. If
+every dimension is unusable, the request fails with a clean error instead
+of returning a meaningless score.
+
+The response is still defensively parsed and validated server-side — every
+dimension is checked to be a finite number and clamped to 0-100; malformed,
+empty, or failed LLM responses surface a clean error to the user instead of
+crashing the request.
 
 ## Setup
 

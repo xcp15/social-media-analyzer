@@ -28,39 +28,88 @@ describe('analyzeText', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns a parsed analysis on success', async () => {
+  it('returns a parsed analysis with a score computed from the breakdown', async () => {
     const payload = {
-      score: 87,
+      scoreBreakdown: { hook: 80, clarity: 90, callToAction: 70, visualAppeal: 60, engagementPotential: 85 },
       strengths: ['Clear call to action'],
       weaknesses: ['No hashtags'],
       suggestions: ['Add relevant hashtags'],
     };
     global.fetch = vi.fn().mockResolvedValue(mockGeminiResponse(200, geminiBodyWithText(JSON.stringify(payload))));
 
-    const result = await analyzeText('Some post text');
+    const result = await analyzeText('Some post text', {
+      buffer: Buffer.from('fake'),
+      mimeType: 'image/png',
+    });
 
-    expect(result).toEqual(payload);
+    // weighted average: hook .25, clarity .2, cta .2, visual .15, engagement .2
+    const expectedScore = Math.round(80 * 0.25 + 90 * 0.2 + 70 * 0.2 + 60 * 0.15 + 85 * 0.2);
+    expect(result.score).toBe(expectedScore);
+    expect(result.scoreBreakdown).toEqual(payload.scoreBreakdown);
+    expect(result.strengths).toEqual(payload.strengths);
   });
 
-  it('clamps an out-of-range score into 0-100', async () => {
-    const payload = { score: 142, strengths: [], weaknesses: [], suggestions: [] };
+  it('redistributes weight when visualAppeal is unavailable (no image, e.g. PDF text)', async () => {
+    const payload = {
+      scoreBreakdown: { hook: 80, clarity: 80, callToAction: 80, engagementPotential: 80 },
+      strengths: [],
+      weaknesses: [],
+      suggestions: [],
+    };
     global.fetch = vi.fn().mockResolvedValue(mockGeminiResponse(200, geminiBodyWithText(JSON.stringify(payload))));
 
     const result = await analyzeText('Some post text');
 
-    expect(result.score).toBe(100);
+    expect(result.scoreBreakdown.visualAppeal).toBeNull();
+    expect(result.score).toBe(80);
   });
 
-  it('throws AppError on malformed JSON from the model', async () => {
-    global.fetch = vi.fn().mockResolvedValue(mockGeminiResponse(200, geminiBodyWithText('not json')));
+  it('clamps out-of-range dimension scores into 0-100', async () => {
+    const payload = {
+      scoreBreakdown: { hook: -10, clarity: 200, callToAction: 50, engagementPotential: 50 },
+      strengths: [],
+      weaknesses: [],
+      suggestions: [],
+    };
+    global.fetch = vi.fn().mockResolvedValue(mockGeminiResponse(200, geminiBodyWithText(JSON.stringify(payload))));
+
+    const result = await analyzeText('Some post text');
+
+    expect(result.scoreBreakdown.hook).toBe(0);
+    expect(result.scoreBreakdown.clarity).toBe(100);
+  });
+
+  it('gracefully drops an individual malformed dimension instead of failing outright', async () => {
+    const payload = {
+      scoreBreakdown: { hook: 'not a number', clarity: 80, callToAction: 80, engagementPotential: 80 },
+      strengths: [],
+      weaknesses: [],
+      suggestions: [],
+    };
+    global.fetch = vi.fn().mockResolvedValue(mockGeminiResponse(200, geminiBodyWithText(JSON.stringify(payload))));
+
+    const result = await analyzeText('Some post text');
+
+    expect(result.scoreBreakdown.hook).toBeNull();
+    expect(result.score).toBe(80);
+  });
+
+  it('throws AppError when the entire breakdown is missing/invalid', async () => {
+    const payload = { strengths: [], weaknesses: [], suggestions: [] };
+    global.fetch = vi.fn().mockResolvedValue(mockGeminiResponse(200, geminiBodyWithText(JSON.stringify(payload))));
 
     await expect(analyzeText('Some post text')).rejects.toThrow(AppError);
   });
 
-  it('throws AppError when the response is missing expected fields', async () => {
-    global.fetch = vi
-      .fn()
-      .mockResolvedValue(mockGeminiResponse(200, geminiBodyWithText(JSON.stringify({ score: 50 }))));
+  it('throws AppError when strengths/weaknesses/suggestions are missing', async () => {
+    const payload = { scoreBreakdown: { hook: 50, clarity: 50, callToAction: 50, engagementPotential: 50 } };
+    global.fetch = vi.fn().mockResolvedValue(mockGeminiResponse(200, geminiBodyWithText(JSON.stringify(payload))));
+
+    await expect(analyzeText('Some post text')).rejects.toThrow(AppError);
+  });
+
+  it('throws AppError on malformed JSON from the model', async () => {
+    global.fetch = vi.fn().mockResolvedValue(mockGeminiResponse(200, geminiBodyWithText('not json')));
 
     await expect(analyzeText('Some post text')).rejects.toThrow(AppError);
   });

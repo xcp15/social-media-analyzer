@@ -1,5 +1,14 @@
+export interface ScoreBreakdown {
+  hook: number | null
+  clarity: number | null
+  callToAction: number | null
+  visualAppeal: number | null
+  engagementPotential: number | null
+}
+
 export interface AnalysisResult {
   score: number
+  scoreBreakdown: ScoreBreakdown
   strengths: string[]
   weaknesses: string[]
   suggestions: string[]
