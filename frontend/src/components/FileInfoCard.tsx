@@ -3,9 +3,10 @@ import { formatFileSize } from '../lib/file'
 interface FileInfoCardProps {
   file: File
   onRemove: () => void
+  disabled?: boolean
 }
 
-export default function FileInfoCard({ file, onRemove }: FileInfoCardProps) {
+export default function FileInfoCard({ file, onRemove, disabled }: FileInfoCardProps) {
   return (
     <div className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex items-center gap-3 min-w-0">
@@ -28,8 +29,9 @@ export default function FileInfoCard({ file, onRemove }: FileInfoCardProps) {
       <button
         type="button"
         onClick={onRemove}
+        disabled={disabled}
         aria-label="Remove file"
-        className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+        className="shrink-0 rounded-lg p-2 text-slate-400 hover:enabled:bg-slate-100 hover:enabled:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />

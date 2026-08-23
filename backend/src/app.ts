@@ -14,6 +14,10 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api', analyzeRouter);
 
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Not found.' });
+});
+
 app.use(errorHandler);
 
 export default app;

@@ -70,13 +70,35 @@ npm install
 npm run dev
 ```
 
+## Known limitations
+
+- **Loading states are two-staged, not four.** The spec's ideal flow is
+  uploading → extracting → analyzing → done. Extraction and analysis happen
+  inside a single backend request/response (no streaming), so the frontend
+  can only honestly distinguish "uploading" (real byte progress via
+  `XMLHttpRequest.upload.onprogress`) from "analyzing" (the whole
+  extract+LLM window). Splitting those two further would need
+  Server-Sent Events or WebSockets, which was cut to stay in scope —
+  no fake/timed progress is shown either way.
+- **Scanned/image-only PDFs are not OCR'd.** If `pdf-parse` extracts little
+  or no text, the app returns a clear error asking the user to upload the
+  page as an image instead, rather than rendering PDF pages to images for
+  OCR (which would need a native canvas dependency).
+
+## Future improvements
+
+- Persistence (save past analyses) and a database
+- User accounts / auth
+- OCR fallback for scanned PDFs via server-side page rendering
+- Streaming progress (SSE/WebSockets) for true multi-stage loading states
+
 ## Roadmap
 
 - [x] Project structure
-- [ ] Upload UI with drag-and-drop
-- [ ] Express backend with health check
-- [ ] PDF and OCR text extraction
+- [x] Upload UI with drag-and-drop
+- [x] Express backend with health check
+- [x] PDF and OCR text extraction
 - [x] LLM analysis service
-- [ ] Results dashboard
-- [ ] Error handling and loading states
+- [x] Results dashboard
+- [x] Error handling and loading states
 - [ ] Deploy and verify production

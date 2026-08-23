@@ -10,20 +10,51 @@ export interface AnalyzeResponse {
   analysis: AnalysisResult
 }
 
-export async function analyzeFile(file: File): Promise<AnalyzeResponse> {
-  const formData = new FormData()
-  formData.append('file', file)
+const REQUEST_TIMEOUT_MS = 60_000
+const GENERIC_ERROR = 'Something went wrong. Please try again.'
 
-  const res = await fetch('/api/analyze', {
-    method: 'POST',
-    body: formData,
+export function analyzeFile(
+  file: File,
+  onUploadProgress?: (percent: number) => void,
+): Promise<AnalyzeResponse> {
+  return new Promise((resolve, reject) => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', '/api/analyze')
+    xhr.timeout = REQUEST_TIMEOUT_MS
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onUploadProgress) {
+        onUploadProgress(Math.round((e.loaded / e.total) * 100))
+      }
+    }
+
+    xhr.onload = () => {
+      let body: { error?: string } & Partial<AnalyzeResponse> = {}
+      try {
+        body = JSON.parse(xhr.responseText)
+      } catch {
+        reject(new Error(GENERIC_ERROR))
+        return
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(body as AnalyzeResponse)
+      } else {
+        reject(new Error(body.error || GENERIC_ERROR))
+      }
+    }
+
+    xhr.onerror = () => {
+      reject(new Error('Network error. Please check your connection and try again.'))
+    }
+
+    xhr.ontimeout = () => {
+      reject(new Error('The request took too long. Please try again.'))
+    }
+
+    xhr.send(formData)
   })
-
-  const body = await res.json().catch(() => null)
-
-  if (!res.ok) {
-    throw new Error(body?.error || 'Something went wrong. Please try again.')
-  }
-
-  return body as AnalyzeResponse
 }
