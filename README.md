@@ -1,152 +1,379 @@
 # Social Media Content Analyzer
 
-*Deployed Application:* https://social-media-analyzer-tan.vercel.app/ 
+> **AI-powered social media post analysis with deterministic engagement scoring and actionable recommendations.**
 
-Upload a PDF or image (JPG/JPEG/PNG) of a social media post. The app extracts
-the text (PDF parsing or OCR), sends it to an LLM for analysis, and returns
-an engagement score with strengths, weaknesses, and suggestions.
+The **Social Media Content Analyzer** is a web application that analyzes social media posts uploaded as **PDF, JPG, JPEG, or PNG** files.
 
-> Status: in progress — this README will be filled in as each milestone lands.
+The application extracts the post content using **PDF parsing or OCR**, analyzes it using **Google Gemini**, and generates an engagement report containing:
 
-## Project structure
+* Overall engagement score
+* Dimension-level score breakdown
+* Strengths
+* Weaknesses
+* Actionable suggestions
 
+For image uploads, the original image is also analyzed by Gemini's vision capabilities so that **Visual Appeal** is evaluated from the actual image rather than only its extracted text.
+
+---
+
+## Live Demo
+
+**App:** https://social-media-analyzer-tan.vercel.app
+
+**Deployment**
+
+* **Frontend:** Vercel
+* **Backend:** Render
+* **LLM:** Google Gemini
+
+> **Note:** The backend is deployed on Render's free tier. After approximately 15 minutes of inactivity, the service may spin down. The first request after an idle period can therefore take around **30–50 seconds** while the server wakes up. Subsequent requests respond normally.
+
+---
+
+## Features
+
+### File Upload
+
+Supports:
+
+* PDF
+* JPG
+* JPEG
+* PNG
+
+The frontend supports both **drag-and-drop** and standard file selection.
+
+### Text Extraction
+
+The backend extracts post content using:
+
+* **PDF:** `pdf-parse`
+* **Images:** OCR
+
+### AI-Powered Analysis
+
+Google Gemini analyzes the post across five engagement dimensions:
+
+| Dimension            | Description                                | Weight |
+| -------------------- | ------------------------------------------ | -----: |
+| Hook                 | Ability to immediately capture attention   |    25% |
+| Clarity              | Readability and clarity of the message     |    20% |
+| Call to Action       | Effectiveness of the CTA                   |    20% |
+| Visual Appeal        | Composition, hierarchy, and visual quality |    15% |
+| Engagement Potential | Overall likelihood of interaction          |    20% |
+
+The analyzer also returns:
+
+* Strengths
+* Weaknesses
+* Actionable suggestions
+
+---
+
+## How It Works
+
+```text
+User Uploads Post
+        │
+        ▼
+   File Detection
+        │
+   ┌────┴─────┐
+   │          │
+  PDF       Image
+   │          │
+   ▼          ▼
+PDF Parsing   OCR
+   │          │
+   └────┬─────┘
+        │
+        ▼
+  Extracted Text
+        │
+        ▼
+  Google Gemini
+        │
+        ▼
+Structured Analysis
+        │
+        ▼
+Deterministic Score
+   Calculation
+        │
+        ▼
+ Results Dashboard
 ```
-social-media-analyzer/
-├── frontend/   React + TypeScript + Tailwind CSS + Vite
-└── backend/    Node.js + Express + TypeScript
+
+---
+
+# AI / LLM Implementation
+
+The application uses **Google Gemini** through a server-side API integration.
+
+### Model
+
+```text
+gemini-flash-lite-latest
 ```
 
-## AI/LLM use
+The analysis service is implemented in:
 
-This project intentionally calls a free-tier LLM API server-side to analyze
-extracted post text. The assignment explicitly permits this ("Free to use
-AI/ML services, any free tier") — it is a deliberate design choice, not a
-shortcut.
-
-Model: Google Gemini (`gemini-flash-lite-latest`, free tier), called from
-`backend/src/services/analysisService.ts`. The API key is never exposed to
-the frontend — all calls happen server-side. The request uses Gemini's
-structured output mode (`responseSchema`) so the model is constrained to
-return valid JSON matching the shape below, rather than relying on prompt
-wording alone.
-
-**For image uploads, the actual image is sent to Gemini** (as inline base64
-data alongside the extracted OCR text), so "Visual Appeal" reflects a real
-vision-based assessment of the image — not a guess from OCR'd text. For
-PDFs, only the extracted text is available, so `visualAppeal` is omitted
-from the request/response entirely rather than having the model invent a
-number for something it never saw.
-
-Exact prompt template (`${text}` is the extracted post text; the bracketed
-line and the `visualAppeal` field are included only when an image is
-attached):
-
+```text
+backend/src/services/analysisService.ts
 ```
-You are a social media growth expert. Analyze the following social media post[, including the attached image,] across specific dimensions.
 
-Post text:
-"""
-${text}
-"""
+The Gemini API key is stored exclusively on the backend and is **never exposed to the frontend**.
 
-Score each applicable dimension from 0-100:
-- hook: does the opening immediately capture attention and create curiosity?
-- clarity: how clear, readable, and easy to understand is the message?
-- callToAction: does the post ask the audience to do something specific (comment, share, click, etc.)? Score low if there is no call to action.
-- visualAppeal: composition, readability of any on-image text, visual hierarchy, and whether the image supports the message.  [omitted entirely when no image is attached]
-- engagementPotential: overall likelihood of likes/comments/shares, considering the whole post (not a duplicate of the other scores).
+### Structured Output
 
-Respond with ONLY a JSON object (no markdown, no commentary) with this exact shape:
+Gemini's structured output capability with `responseSchema` is used to constrain the response to the expected JSON structure.
+
+```json
 {
   "scoreBreakdown": {
-    "hook": <integer 0-100>,
-    "clarity": <integer 0-100>,
-    "callToAction": <integer 0-100>,
-    "visualAppeal": <integer 0-100>,
-    "engagementPotential": <integer 0-100>
+    "hook": 0,
+    "clarity": 0,
+    "callToAction": 0,
+    "visualAppeal": 0,
+    "engagementPotential": 0
   },
-  "strengths": [<short strings describing what the post does well>],
-  "weaknesses": [<short strings describing what could hurt engagement>],
-  "suggestions": [<short, actionable strings to improve the post>]
+  "strengths": [],
+  "weaknesses": [],
+  "suggestions": []
 }
 ```
 
-### Overall score: computed, not model-guessed
+This makes the response easier to validate and consume reliably on the backend.
 
-The model is **not** asked for an overall score directly. Instead, the
-backend computes it deterministically as a weighted average of the five
-dimension scores (`backend/src/services/analysisService.ts`, `SCORE_WEIGHTS`):
+---
 
-| Dimension | Weight |
-|---|---|
-| Hook | 0.25 |
-| Clarity | 0.20 |
-| Call to Action | 0.20 |
-| Visual Appeal | 0.15 |
-| Engagement Potential | 0.20 |
+## Image Analysis
 
-This guarantees the headline score and its breakdown always tell the same
-story (an LLM asked to output both independently can produce an overall
-score that doesn't match its own breakdown). When `visualAppeal` is
-unavailable (PDF text, or the model omitted/malformed a dimension), that
-weight is redistributed proportionally across the remaining dimensions
-rather than penalizing the post for something that was never assessed. If
-every dimension is unusable, the request fails with a clean error instead
-of returning a meaningless score.
+For image uploads, the actual image is sent to Gemini as inline image data alongside the OCR-extracted text.
 
-The response is still defensively parsed and validated server-side — every
-dimension is checked to be a finite number and clamped to 0-100; malformed,
-empty, or failed LLM responses surface a clean error to the user instead of
-crashing the request.
+This allows the model to evaluate:
 
-## Setup
+* Composition
+* Visual hierarchy
+* Readability of on-image text
+* Layout
+* Whether the visual supports the message
 
-### Backend
+Therefore, **Visual Appeal** is based on the actual uploaded image.
 
-```bash
-cd backend
-npm install
-cp .env.example .env   # fill in GEMINI_API_KEY
-npm run dev
+For PDFs, only extracted text is available. Since the application does not render PDF pages into images, `visualAppeal` is omitted when visual information is unavailable rather than allowing the model to invent a score.
+
+---
+
+# Deterministic Overall Score
+
+The model is **not asked to generate the overall score**.
+
+Instead, the backend calculates the final score using a weighted average of the individual dimensions.
+
+```text
+Overall Score =
+    Hook × 0.25
+  + Clarity × 0.20
+  + CallToAction × 0.20
+  + VisualAppeal × 0.15
+  + EngagementPotential × 0.20
 ```
+
+This ensures that the headline score always remains consistent with the displayed score breakdown.
+
+### Missing Dimensions
+
+When `visualAppeal` is unavailable, its weight is redistributed proportionally across the remaining dimensions.
+
+This prevents a post from being penalized for a dimension that could not actually be assessed.
+
+If every dimension is unusable, the backend returns a clean error instead of producing a meaningless score.
+
+---
+
+# Server-Side Validation
+
+LLM responses are validated before being returned to the frontend.
+
+For every score, the backend:
+
+1. Checks that the value is numeric
+2. Ensures the value is finite
+3. Clamps it to the `0–100` range
+4. Rejects unusable responses
+5. Returns a clean error for malformed or failed responses
+
+This prevents invalid LLM output from reaching the scoring system or crashing the request.
+
+---
+
+# Tech Stack
 
 ### Frontend
 
+* React
+* TypeScript
+* Vite
+* Tailwind CSS
+
+### Backend
+
+* Node.js
+* Express
+* TypeScript
+
+### AI & Processing
+
+* Google Gemini API
+* OCR
+* `pdf-parse`
+
+### Deployment
+
+* Vercel
+* Render
+
+---
+
+# Project Structure
+
+```text
+social-media-analyzer/
+│
+├── frontend/
+│   └── React + TypeScript + Tailwind CSS + Vite
+│
+├── backend/
+│   └── Node.js + Express + TypeScript
+│
+└── README.md
+```
+
+---
+
+# Getting Started
+
+## Prerequisites
+
+* Node.js
+* npm
+* Google Gemini API key
+
+## Backend
+
 ```bash
-cd frontend
+cd backend
+
 npm install
+
+cp .env.example .env
+```
+
+Add your Gemini API key to `.env`:
+
+```env
+GEMINI_API_KEY=your_api_key_here
+```
+
+Start the development server:
+
+```bash
 npm run dev
 ```
 
-## Known limitations
+## Frontend
 
-- **Loading states are two-staged, not four.** The spec's ideal flow is
-  uploading → extracting → analyzing → done. Extraction and analysis happen
-  inside a single backend request/response (no streaming), so the frontend
-  can only honestly distinguish "uploading" (real byte progress via
-  `XMLHttpRequest.upload.onprogress`) from "analyzing" (the whole
-  extract+LLM window). Splitting those two further would need
-  Server-Sent Events or WebSockets, which was cut to stay in scope —
-  no fake/timed progress is shown either way.
-- **Scanned/image-only PDFs are not OCR'd.** If `pdf-parse` extracts little
-  or no text, the app returns a clear error asking the user to upload the
-  page as an image instead, rather than rendering PDF pages to images for
-  OCR (which would need a native canvas dependency).
+Open another terminal:
 
-## Future improvements
+```bash
+cd frontend
 
-- Persistence (save past analyses) and a database
-- User accounts / auth
-- OCR fallback for scanned PDFs via server-side page rendering
-- Streaming progress (SSE/WebSockets) for true multi-stage loading states
+npm install
 
-## Roadmap
+npm run dev
+```
 
-- [x] Project structure
-- [x] Upload UI with drag-and-drop
-- [x] Express backend with health check
-- [x] PDF and OCR text extraction
-- [x] LLM analysis service
-- [x] Results dashboard
-- [x] Error handling and loading states
-- [ ] Deploy and verify production
+---
+
+# API Architecture
+
+The application follows a client-server architecture:
+
+```text
+React Frontend
+      │
+      │ HTTP Request
+      ▼
+Express Backend
+      │
+      ├── File Validation
+      ├── PDF Parsing / OCR
+      ├── Gemini Analysis
+      ├── Response Validation
+      └── Score Calculation
+      │
+      ▼
+Structured JSON Response
+      │
+      ▼
+Results Dashboard
+```
+
+All Gemini API communication happens on the backend, keeping the API key private and separating AI processing from the client.
+
+---
+
+# Loading Flow
+
+The application intentionally uses two loading stages:
+
+```text
+Uploading → Analyzing → Complete
+```
+
+Upload progress is reported using:
+
+```text
+XMLHttpRequest.upload.onprogress
+```
+
+Extraction and analysis currently happen within the same backend request, so the frontend does not display artificial progress between them.
+
+A more granular flow such as:
+
+```text
+Uploading → Extracting → Analyzing → Complete
+```
+
+would require streaming communication such as **Server-Sent Events (SSE)** or **WebSockets**.
+
+---
+
+# Known Limitations
+
+### Scanned / Image-only PDFs
+
+Scanned PDFs are currently not OCR'd.
+
+If `pdf-parse` extracts little or no usable text, the application returns a clear error asking the user to upload the page as an image instead.
+
+Rendering PDF pages into images for OCR would require additional server-side PDF rendering dependencies.
+
+### Backend Cold Starts
+
+The backend runs on Render's free tier and may spin down after inactivity.
+
+As a result, the first request after an idle period can take significantly longer than subsequent requests.
+
+### No Persistence
+
+Analyses are currently processed per request and are not stored in a database.
+
+---
+
+## Project Status
+
+**Completed and deployed.**
+
+The application has been deployed to production and verified with the implemented upload, extraction, AI analysis, scoring, error handling, and results dashboard flows.
