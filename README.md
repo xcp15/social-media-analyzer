@@ -1,5 +1,7 @@
 # Social Media Content Analyzer
 
+*Deployed Application:* https://social-media-analyzer-tan.vercel.app/ 
+
 Upload a PDF or image (JPG/JPEG/PNG) of a social media post. The app extracts
 the text (PDF parsing or OCR), sends it to an LLM for analysis, and returns
 an engagement score with strengths, weaknesses, and suggestions.
