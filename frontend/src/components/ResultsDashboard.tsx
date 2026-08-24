@@ -168,21 +168,28 @@ export default function ResultsDashboard({
           Score Breakdown
         </h3>
         <div className="grid gap-4 sm:grid-cols-3">
-          {Object.entries(breakdown).map(([key, value]) => (
-            <div key={key} className="space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400 capitalize">{key.replace(/_/g, ' ')}</span>
-                <span className="font-medium text-white">{value}%</span>
+          {Object.entries(breakdown)
+            .filter(([, value]) => value !== null && value !== undefined)
+            .map(([key, value]) => (
+              <div key={key} className="space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400 capitalize">{key.replace(/([A-Z])/g, ' $1')}</span>
+                  <span className="font-medium text-white">{value}%</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-700">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-700"
+                    style={{ width: `${value}%` }}
+                  />
+                </div>
               </div>
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-700">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-700"
-                  style={{ width: `${value}%` }}
-                />
-              </div>
-            </div>
-          ))}
+            ))}
         </div>
+        {Object.values(breakdown).some((value) => value === null) && (
+          <p className="mt-4 text-xs text-slate-500">
+            Visual Appeal isn't scored for PDF text — no image was available to evaluate.
+          </p>
+        )}
       </div>
 
       {/* ─── Strengths & Weaknesses ─── */}
